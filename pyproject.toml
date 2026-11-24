@@ -41,6 +41,8 @@ dev = [
     "jupyter>=1.0",
     "matplotlib>=3.8",
 ]
+# Read-only MCP server (python -m energy_brain.mcp_server, docs/mcp.md). Pinned: the version CI tests.
+mcp = ["mcp==2.3.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
