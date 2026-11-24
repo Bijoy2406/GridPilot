@@ -26,7 +26,13 @@ from energy_brain import __version__
 from energy_brain.api.models import FIRST_PLAN_DAY, last_plan_day
 from energy_brain.api.service import PlanService
 from energy_brain.config import DEFAULT_SITE_CONFIG
-from energy_brain.explainer.tools import TOOL_DECLARATIONS, TOOL_NAMES, ExplainerTools, ToolArgumentError
+from energy_brain.explainer.tools import (
+    TOOL_DECLARATIONS,
+    TOOL_NAMES,
+    ExplainerTools,
+    ToolArgumentError,
+    validate_arguments,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +129,15 @@ class GridPilotMCP:
             raise ToolInputError(f"{name}: missing argument(s) ['date']")
         day = self._day(args.pop("date"))
         weight = self._weight(args.pop("weight", DEFAULT_WEIGHT))
+        # Schema-level checks (unknown, missing, type, enum) before planning: a bad call never solves a plan.
+        # Clock times and ranges need the plan's slot grid; ExplainerTools checks those after planning.
+        try:
+            clean = validate_arguments(name, args)
+        except ToolArgumentError as exc:
+            raise ToolInputError(str(exc)) from None
         entry, _ = self.service.get_plan(day, weight)
         try:
-            return _json(ExplainerTools(entry.context).call(name, args))
+            return _json(ExplainerTools(entry.context).call(name, clean))
         except ToolArgumentError as exc:
             raise ToolInputError(str(exc)) from None
 

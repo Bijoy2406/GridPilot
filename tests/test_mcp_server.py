@@ -166,6 +166,55 @@ def test_day_after_tomorrow_is_rejected(app):
         app.call("get_signals", {"date": later.isoformat()})
 
 
+@pytest.fixture
+def no_planning(dirs, monkeypatch) -> GridPilotMCP:
+    """A server whose plan service fails the test if it is asked to plan."""
+    service = PlanService(settings_for(dirs))
+
+    def must_not_plan(*args, **kwargs):
+        pytest.fail("get_plan() was called before the tool arguments were validated")
+
+    monkeypatch.setattr(service, "get_plan", must_not_plan)
+    return GridPilotMCP(service)
+
+
+@pytest.mark.parametrize(
+    "name, args, message",
+    [
+        ("find_slots", {"condition": "sunny"}, "find_slots: condition must be one of"),  # enum
+        ("get_slot", {}, "get_slot: missing argument(s) ['time']"),  # missing
+        ("get_slot_range", {"start": "17:00"}, "get_slot_range: missing argument(s) ['end']"),  # missing
+        ("get_slot", {"time": 1900}, "get_slot: time must be a string"),  # type
+        ("find_slots", {"condition": 3}, "find_slots: condition must be a string"),  # type
+        ("get_plan_summary", {"time": "19:00"}, "get_plan_summary: unknown argument(s) ['time']"),  # unknown
+        ("get_forecast", {"start": "06:00", "end": "18:00", "step": 1}, "unknown argument(s) ['step']"),
+    ],
+)
+def test_schema_errors_are_rejected_before_planning(no_planning, name, args, message):
+    with pytest.raises(mcp_server.ToolInputError, match=escaped(message)):
+        no_planning.call(name, {"date": DEMO_DAY, "weight": WEIGHT, **args})
+
+
+def test_valid_arguments_still_reach_the_planner(dirs, monkeypatch):
+    service = PlanService(settings_for(dirs))
+    calls = []
+    real = service.get_plan
+    monkeypatch.setattr(service, "get_plan", lambda *a: calls.append(a) or real(*a))
+    GridPilotMCP(service).call("find_slots", {"date": DEMO_DAY, "condition": "outage"})
+    assert calls == [(date.fromisoformat(DEMO_DAY), WEIGHT)]
+
+
+def test_time_values_are_still_checked_by_the_explainer_after_planning(dirs, monkeypatch):
+    """Clock parsing and range checks need the plan's slot grid, so they stay in ExplainerTools."""
+    service = PlanService(settings_for(dirs))
+    calls = []
+    real = service.get_plan
+    monkeypatch.setattr(service, "get_plan", lambda *a: calls.append(a) or real(*a))
+    with pytest.raises(mcp_server.ToolInputError, match="is not HH:MM"):
+        GridPilotMCP(service).call("get_slot", {"date": DEMO_DAY, "time": "noon"})
+    assert len(calls) == 1
+
+
 def test_explainer_argument_errors_pass_through(app):
     with pytest.raises(mcp_server.ToolInputError, match="condition must be one of"):
         app.call("find_slots", {"date": DEMO_DAY, "condition": "sunny"})
