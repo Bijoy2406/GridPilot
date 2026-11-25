@@ -9,9 +9,9 @@ what they really used (a missing or wrong disclosure can block Submit). Dates ar
 > **How we built it.** A three-person team built Gridpilot AI with AI coding assistants under human control. The
 > backend/agents lead (Bijoy) worked as an orchestrator: he wrote each prompt, ran the coding agent, reviewed and
 > tested the result himself, and approved every commit, pull request and merge. No change reached `main` without a
-> passing CI run (backend and web test suites, lint, type check). The shipped product itself does **not** act as an
-> MCP client and uses no MCP server; the Explainer calls ten read-only functions through ordinary LLM function
-> calling.
+> passing CI run (backend and web test suites, lint, type check). The product ships a small **read-only MCP server**
+> (stdio) that exposes the same ten verified Explainer tools to any MCP client; the product is not an MCP client,
+> and the in-app Explainer calls those tools through ordinary LLM function calling.
 
 ## 2. Tools and assistants used
 
@@ -68,17 +68,21 @@ add any rules or context files you used]`
 
 ## 4. MCP (Model Context Protocol)
 
-**Does the product use MCP?** No. The shipped app is not an MCP client and exposes no MCP server. The Explainer uses
-standard LLM function calling with ten read-only functions (`get_plan_summary`, `get_slot`, `get_slot_range`,
-`find_slots`, `get_forecast`, `get_signals`, `get_assets`, `get_risk_log`, `get_forecast_note`,
-`get_backtest_totals`) plus a `refuse` function. Their results are typed JSON, they cannot change anything, and
-unknown tool names are rejected.
+**Does the product use MCP?** Yes, as a **server** only (built by us, `src/energy_brain/mcp_server/`,
+[docs/mcp.md](../mcp.md)). It runs locally over stdio (`python -m energy_brain.mcp_server`), needs no LLM key
+and is read-only: it exposes `list_days` and the Explainer's ten tools (`get_plan_summary`, `get_slot`,
+`get_slot_range`, `find_slots`, `get_forecast`, `get_signals`, `get_assets`, `get_risk_log`,
+`get_forecast_note`, `get_backtest_totals`) for a chosen date and weight, three resources
+(`gridpilot://caveats`, `gridpilot://site`, `gridpilot://backtest`) and three prompts (`explain_plan`,
+`outage_readiness`, `compare_with_baseline`). Tool schemas are the Explainer's declarations plus `date` and
+`weight`; tests check that every result equals the in-app tool's result. The shipped web app is not an MCP
+client: its Explainer uses standard LLM function calling with the same ten functions plus `refuse`.
 
 **MCP servers used while building (Bijoy's Claude Code session):**
 
 | Server | Why it was used | Tools it exposed that we used |
 | --- | --- | --- |
-| **Claude built-in browser** (the in-app browser tools) | To open the local app and the live site, check layouts at phone/tablet/desktop widths, read the page and run small scripts to measure elements, test the chat, voice recorder and demo mode | navigate, screenshot, read page / find, run page script, resize window, console and network reading |
+| **Claude built-in browser** (the in-app browser tools) | To open the local app and the live site, check layouts at phone/tablet/desktop widths, read the page and run small scripts to measure elements, test the chat, voice recorder and demo mode | 6 tools: navigate, computer (clicks, typing, screenshots), find, javascript_tool, resize_window, browser_batch |
 
 **Servers that were configured in the same environment but not used for the project:** Vercel, Figma, Netlify,
 Stata, Codex image generation, a voice server. The 21st.dev "Magic" MCP server was tried for UI components but failed
