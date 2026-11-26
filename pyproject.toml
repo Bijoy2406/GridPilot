@@ -29,7 +29,8 @@ dependencies = [
     "uvicorn>=0.27",
     "reportlab>=4.4",  # deterministic PDF reports; built-in fonts only
     # Explainer LLM client (#19): Groq through its OpenAI-compatible API
-    "openai>=1.40",
+    # <2: openai 3.x breaks tests/test_transcribe.py and is unverified with explainer/llm.py and api/transcribe.py
+    "openai>=1.40,<2",
 ]
 
 [project.optional-dependencies]
